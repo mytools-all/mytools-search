@@ -1,0 +1,30 @@
+{
+  "name": "mytools-search",
+  "description": "本地搜索",
+  "apiVersion": 1,
+  "main": "index.html",
+  "pluginName": "本地搜索",
+  "version": "0.1.0",
+  "capabilities": [
+    "fs.searchstatus",
+    "fs.globalsearch",
+    "fs.searchpreview",
+    "shell.open",
+    "shell.reveal",
+    "clipboard.write",
+    "app.list",
+    "app.launch"
+  ],
+  "features": [
+    {
+      "code": "search",
+      "explain": "打开本地搜索",
+      "cmds": [
+        "本地搜索",
+        "文件搜索",
+        "everything"
+      ]
+    }
+  ],
+  "hostSearch": "搜索文件、文件夹…"
+}

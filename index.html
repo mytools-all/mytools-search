@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>本地搜索</title>
+    <link rel="stylesheet" href="tool.css" />
+    <style>
+      .search-layout {
+        display: grid;
+        grid-template-columns: 142px minmax(0, 1fr);
+        flex: 1;
+        min-height: 0;
+      }
+      .filters {
+        border-right: 1px solid var(--border);
+        background: var(--bg);
+        padding: 14px 0;
+        overflow: auto;
+      }
+      .filters strong {
+        display: block;
+        padding: 0 14px 14px;
+      }
+      .filters button {
+        display: block;
+        text-align: left;
+        width: 100%;
+        border: 0;
+        border-radius: 0;
+        padding: 10px 18px;
+        color: var(--muted);
+      }
+      .filters button.active {
+        color: var(--accent);
+        background: var(--soft);
+      }
+      .search-main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+      .search-field {
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .search-field input {
+        flex: 1;
+        font-size: 15px;
+      }
+      .results {
+        flex: 1;
+        overflow: auto;
+        outline: none;
+        min-height: 0;
+      }
+      .result {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) 110px;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        cursor: default;
+      }
+      .result.selected {
+        background: var(--soft);
+      }
+      .file-icon {
+        font-size: 25px;
+        opacity: 0.7;
+      }
+      .file-name {
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .file-path {
+        font-size: 12px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .meta {
+        font-size: 11px;
+        color: var(--muted);
+        text-align: right;
+      }
+      .body-row {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+      .preview {
+        flex: 0 0 35%;
+        padding: 14px;
+        border-left: 1px solid var(--border);
+        overflow: auto;
+        min-width: 0;
+      }
+      .preview img {
+        max-width: 100%;
+      }
+      #connection {
+        padding: 16px;
+        margin: 20px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      .bottom {
+        padding: 6px 10px;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .bottom button,
+      .bottom select {
+        padding: 4px 8px;
+      }
+      mark {
+        background: #ffe87d;
+        color: #333;
+      }
+      .hintline {
+        padding: 3px 12px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      #history {
+        max-width: 150px;
+      }
+      .filter-settings { padding:12px; font-size:12px; }.filter-settings input { width:100%; box-sizing:border-box; margin:5px 0; }.filter-settings button { font-size:11px; }.filter-settings summary { cursor:pointer; color:var(--muted); }
+      .preview iframe { width:100%; min-height:320px; border:0; }.preview video,.preview audio { width:100%; }
+      .advanced-filters { display:flex; flex-wrap:wrap; gap:10px; padding:10px; border-bottom:1px solid var(--border); background:var(--bg); }
+      .advanced-filters label { display:flex; align-items:center; gap:6px; font-size:12px; }
+      .advanced-filters input { width:140px; }
+      .preview-meta { white-space:pre-wrap; overflow-wrap:anywhere; color:var(--muted); font-size:11px; margin:10px 0 16px; }
+      .bottom { flex-wrap:wrap; }
+      @media (max-width: 650px) {
+        .search-layout {
+          grid-template-columns: 100px 1fr;
+        }
+        .filters button {
+          padding: 9px 12px;
+        }
+        .result {
+          grid-template-columns: 26px minmax(0, 1fr);
+        }
+        .meta {
+          display: none;
+        }
+        .preview {
+          flex-basis: 45%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="search-layout">
+        <aside class="filters">
+          <strong>过滤项</strong>
+          <nav id="types"></nav>
+          <details class="filter-settings"><summary>管理过滤项</summary><input id="filter-name" placeholder="名称" aria-label="过滤项名称" /><input id="filter-query" placeholder="例如 ext:rs;ts" aria-label="过滤项条件" /><button id="save-filter">＋ 新增过滤项</button><div id="custom-filter-list"></div></details>
+        </aside>
+        <section class="search-main">
+          <div class="search-field">
+            <input
+              id="query"
+              placeholder="搜索文件、文件夹…（支持 Everything 语法）"
+              aria-label="搜索文件"
+              autocomplete="off"
+            /><button id="filter-toggle" aria-expanded="false">筛选</button><button id="refresh" title="刷新">↻</button
+            ><button id="theme" title="切换主题">◐</button>
+          </div>
+          <div id="advanced-filters" class="advanced-filters hidden">
+            <label>扩展名 <input id="extension-filter" placeholder="txt;md;pdf" /></label>
+            <label>排除 <input id="exclude-filter" placeholder="名称或路径，分号分隔" /></label>
+            <label>修改时间 <select id="modified-period"><option value="">不限</option><option value="today">今天</option><option value="yesterday">昨天</option><option value="thisweek">本周</option><option value="thismonth">本月</option><option value="custom">自定义日期</option></select></label>
+            <span id="date-range" class="hidden"><input id="modified-from" type="date" aria-label="开始日期" /> 至 <input id="modified-to" type="date" aria-label="结束日期" /></span>
+            <button id="reset-filters">重置筛选</button>
+          </div>
+          <div class="hintline">
+            ↑↓ 选择 · Enter 打开 · Ctrl+Enter 定位 · 空格预览
+          </div>
+          <div id="connection" class="hidden">
+            <strong>未连接到 Everything</strong>
+            <p id="connection-message">请启动 Everything 并等待索引就绪。</p>
+            <div class="row">
+              <button id="start" class="primary">启动已安装的 Everything</button
+              ><button id="retry">重新连接</button>
+            </div>
+          </div>
+          <div class="body-row">
+            <div
+              id="results"
+              class="results"
+              tabindex="0"
+              role="listbox"
+              aria-label="搜索结果"
+            ></div>
+            <section id="preview" class="preview hidden"></section>
+          </div>
+          <div class="toolbar bottom">
+            <select id="sort" aria-label="排序">
+              <option value="1">按名称升序</option>
+              <option value="2">按名称降序</option>
+              <option value="13">按修改时间升序</option>
+              <option value="14">按修改时间降序</option>
+              <option value="5">按大小升序</option>
+              <option value="6">按大小降序</option>
+              <option value="3">按路径升序</option><option value="4">按路径降序</option><option value="7">按扩展名升序</option><option value="8">按扩展名降序</option></select
+            ><select id="history" aria-label="搜索历史">
+              <option value="">搜索历史</option></select
+            ><span class="spacer"></span><button id="previous">‹</button
+            ><span id="count">0 / 0</span><button id="next">›</button
+            ><button id="preview-toggle">预览面板</button
+            ><button id="open">打开</button><button id="reveal">定位</button
+            ><button id="copy">复制路径</button>
+          </div>
+        </section>
+      </div>
+      <footer id="status" class="status" role="status"></footer>
+    </main>
+    <script type="module" src="app.mjs"></script>
+  </body>
+</html>
