@@ -81,7 +81,35 @@ function picked() {
   if (!entries[selected]) throw Error("请先选择结果");
   return entries[selected];
 }
+function clearSearch() {
+  generation++;
+  pending = false;
+  entries = [];
+  selected = -1;
+  total = 0;
+  offset = 0;
+  iconGeneration++;
+  iconObserver?.disconnect();
+  previewGeneration++;
+  for (const media of $("#preview").querySelectorAll("audio,video")) {
+    media.pause();
+    media.removeAttribute("src");
+    media.load();
+  }
+  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
+  $("#results").replaceChildren();
+  $("#preview").replaceChildren();
+  $("#preview").classList.add("hidden");
+  $("#connection").classList.add("hidden");
+  $("#count").textContent = "0 / 0";
+  $("#previous").disabled = true;
+  $("#next").disabled = true;
+  for (const id of ["open","reveal","copy","preview-toggle"]) $("#"+id).disabled = true;
+  $("#refresh").disabled = false;
+  status("输入关键词开始搜索");
+}
 function select(index, focus = false) {
+  if (!entries.length) { selected = -1; return; }
   selected = Math.max(0, Math.min(entries.length - 1, index));
   $$(".result").forEach((el, i) => {
     el.classList.toggle("selected", i === selected);
@@ -154,6 +182,7 @@ function render() {
     (total ? offset + 1 : 0) + "–" + (offset + entries.length) + " / " + total;
   $("#previous").disabled = offset === 0;
   $("#next").disabled = offset + entries.length >= total;
+  for (const id of ["open","reveal","copy","preview-toggle"]) $("#"+id).disabled = !entries.length;
   select(0);
   hydrateIcons();
 }
@@ -213,6 +242,8 @@ function showConnection(message, title = "未连接到 Everything") {
   $("#connection-message").textContent = message;
 }
 async function search() {
+  const q = $("#query").value.trim();
+  if (!q) { clearSearch(); return; }
   if (busy) {
     pending = true;
     generation++;
@@ -222,7 +253,6 @@ async function search() {
   const token = ++generation;
   $("#refresh").disabled = true;
   status("正在查询 Everything…");
-  const q = $("#query").value.trim();
   try {
     const filter = filters.find((f) => f[0] === type)[2];
     const query = buildSearchQuery({query:q,category:filter,extension:$("#extension-filter").value,excluded:$("#exclude-filter").value,period:$("#modified-period").value,from:$("#modified-from").value,to:$("#modified-to").value});
@@ -275,10 +305,12 @@ const schedule = debounce(() => {
 }, 160);
 window.mytools?.onSearch?.(event => {
   $("#query").value = event.query;
+  if (!$("#query").value.trim()) { clearSearch(); return; }
   if (event.key) $("#query").dispatchEvent(new KeyboardEvent("keydown", {key:event.key,bubbles:true}));
   else { generation++; schedule(); }
 });
 $("#query").oninput = () => {
+  if (!$("#query").value.trim()) { clearSearch(); return; }
   generation++;
   schedule();
 };
@@ -439,11 +471,6 @@ ready(async (env) => {
     $("#query").style.display = "none";
     $("#query").setAttribute("aria-hidden", "true");
   }
-  const s = await call("fs.searchstatus");
-  if (s.running) await search();
-  else
-    showConnection(
-      "请启动 Everything 1.4 / 1.5a 并等待索引完成。此插件直接使用 Everything 索引，不扫描磁盘目录。",
-    );
+  await search();
   if (!env?.hostSearch) $("#query").focus();
 });
