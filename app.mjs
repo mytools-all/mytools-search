@@ -180,8 +180,8 @@ function hydrateIcons() {
         batch.forEach(entry => queue.delete(entry.path));
         let icons;
         try { icons = await call("fs.searchicons", {paths:batch.map(entry=>entry.path)}); }
-        catch { icons = []; }
-        if (!Array.isArray(icons)) icons = [];
+        catch { queue.clear(); return; }
+        if (!Array.isArray(icons)) { queue.clear(); return; }
         if (token !== iconGeneration) return;
         for (const entry of batch) {
           const icon = icons.find(item=>item.path===entry.path)?.icon;
