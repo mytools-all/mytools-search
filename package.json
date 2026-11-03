@@ -33,7 +33,8 @@
     "searchQuery.mjs",
     "utils.mjs",
     "*.js",
-    "*.LICENSE"
+    "*.LICENSE",
+    "resultPresentation.mjs"
   ],
   "scripts": {
     "test": "node --test"

@@ -9,6 +9,7 @@
     "fs.searchstatus",
     "fs.globalsearch",
     "fs.searchpreview",
+    "fs.searchicons",
     "shell.open",
     "shell.reveal",
     "clipboard.write",

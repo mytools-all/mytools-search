@@ -11,6 +11,7 @@ import {
   debounce,
 } from "./common.mjs";
 import { buildSearchQuery } from "./searchQuery.mjs";
+import { resultName, resultParent, placeholderIcon } from "./resultPresentation.mjs";
 const filters = [
   ["all", "全部", ""],
   ["folder", "文件夹", "folder:"],
@@ -34,6 +35,9 @@ let entries = [],
   previewGeneration = 0,
   history = [];
 const limit = 100;
+const iconCache = new Map();
+let iconObserver;
+let iconGeneration = 0;
 try {
   const saved = JSON.parse(localStorage.getItem("search-custom-filters") || "[]");
   if (Array.isArray(saved)) filters.push(...saved.filter(f=>Array.isArray(f) && f.length===3 && f.every(x=>typeof x === "string") && f[0].startsWith("custom-")).slice(0,30));
@@ -51,7 +55,8 @@ $("#types").innerHTML = filters
       "</button>",
   )
   .join("");
-$("#custom-filter-list").innerHTML = filters.filter(f=>f[0].startsWith("custom-")).map(([id,label])=>'<div>'+escapeHtml(label)+' <button data-remove-filter="'+escapeHtml(id)+'" aria-label="删除过滤项">×</button></div>').join("");
+const custom = filters.filter(f=>f[0].startsWith("custom-"));
+$("#custom-filter-list").innerHTML = custom.length ? custom.map(([id,label,query])=>'<div class="custom-filter"><div class="custom-filter__text"><strong>'+escapeHtml(label)+'</strong><code title="'+escapeHtml(query)+'">'+escapeHtml(query)+'</code></div><button class="filter-delete" data-remove-filter="'+escapeHtml(id)+'" aria-label="删除过滤项：'+escapeHtml(label)+'" title="删除此过滤项"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg><span>删除</span></button></div>').join("") : '<p class="filter-empty">暂无自定义过滤项</p>';
 }
 renderFilters();
 function saveFilters() {
@@ -68,7 +73,9 @@ $("#save-filter").onclick = action(() => {
 $("#custom-filter-list").onclick = e => {
   const id=e.target.closest("[data-remove-filter]")?.dataset.removeFilter;
   const at=filters.findIndex(f=>f[0]===id);if(at<0)return;
+  const label=filters[at][1];
   filters.splice(at,1);if(type===id){type="all";offset=0;void action(search)();}saveFilters();
+  status("已删除过滤项："+label);$("#filter-name").focus();
 };
 function picked() {
   if (!entries[selected]) throw Error("请先选择结果");
@@ -117,13 +124,13 @@ function render() {
             '<div role="option" class="result" data-index="' +
             i +
             '"><span class="file-icon">' +
-            (e.directory ? "▱" : "▤") +
+            '<img alt="" src="'+(iconCache.get(e.path+"\0"+e.modified) || placeholderIcon(e.directory))+'" />' +
             '</span><div><div class="file-name">' +
-            highlight(e.name) +
+            highlight(resultName(e)) +
             '</div><div class="file-path" title="' +
             escapeHtml(e.path) +
             '">' +
-            escapeHtml(e.path.replace(/[\\/][^\\/]+$/, "")) +
+            escapeHtml(resultParent(e)) +
             '</div></div><div class="meta">' +
             (e.directory ? "文件夹" : formatBytes(e.size)) +
             "<br>" +
@@ -148,6 +155,57 @@ function render() {
   $("#previous").disabled = offset === 0;
   $("#next").disabled = offset + entries.length >= total;
   select(0);
+  hydrateIcons();
+}
+function hydrateIcons() {
+  const token = ++iconGeneration;
+  iconObserver?.disconnect();
+  const queue = new Map();
+  let running = false;
+  const applyIcons = () => {
+    $$(".result").forEach(row => {
+      const entry = entries[Number(row.dataset.index)];
+      const image = row.querySelector(".file-icon img");
+      if (!entry || !image) return;
+      image.src = iconCache.get(entry.path+"\0"+entry.modified) || placeholderIcon(entry.directory);
+      image.onerror = () => { image.onerror = null; image.src = placeholderIcon(entry.directory); };
+    });
+  };
+  const load = async () => {
+    if (running) return;
+    running = true;
+    try {
+      while (queue.size && token === iconGeneration) {
+        const batch = [...queue.values()].slice(0,8);
+        batch.forEach(entry => queue.delete(entry.path));
+        let icons;
+        try { icons = await call("fs.searchicons", {paths:batch.map(entry=>entry.path)}); }
+        catch { icons = []; }
+        if (!Array.isArray(icons)) icons = [];
+        if (token !== iconGeneration) return;
+        for (const entry of batch) {
+          const icon = icons.find(item=>item.path===entry.path)?.icon;
+          iconCache.set(entry.path+"\0"+entry.modified, typeof icon === "string" && icon.startsWith("data:image/png;base64,") ? icon : null);
+        }
+        while (iconCache.size > 256) iconCache.delete(iconCache.keys().next().value);
+        applyIcons();
+      }
+    } finally { running = false; }
+  };
+  const enqueue = row => {
+    const entry = entries[Number(row.dataset.index)];
+    if (entry && !iconCache.has(entry.path+"\0"+entry.modified)) queue.set(entry.path,entry);
+  };
+  if (typeof IntersectionObserver === "undefined") {
+    $$(".result").slice(0,16).forEach(enqueue);
+    void load();
+  } else {
+    iconObserver = new IntersectionObserver(changes=>{
+      for (const change of changes) if(change.isIntersecting) {enqueue(change.target);iconObserver.unobserve(change.target);}
+      void load();
+    },{root:$("#results"),rootMargin:"48px"});
+    $$(".result").forEach(row=>iconObserver.observe(row));
+  }
 }
 function showConnection(message, title = "未连接到 Everything") {
   $("#connection strong").textContent = title;
@@ -335,7 +393,7 @@ async function preview() {
     }
     $("#preview").replaceChildren();
     const heading = document.createElement("strong");
-    heading.textContent = file.name;
+    heading.textContent = resultName(file);
     $("#preview").append(heading);
     const metadata = document.createElement("div");
     metadata.className = "preview-meta";
