@@ -4,7 +4,7 @@
   "apiVersion": 1,
   "main": "index.html",
   "pluginName": "本地搜索",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "capabilities": [
     "fs.searchstatus",
     "fs.globalsearch",
