@@ -4,7 +4,7 @@
   "apiVersion": 1,
   "main": "index.html",
   "pluginName": "本地搜索",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "capabilities": [
     "fs.searchstatus",
     "fs.globalsearch",
@@ -27,5 +27,8 @@
       ]
     }
   ],
-  "hostSearch": "搜索文件、文件夹…"
+  "hostSearch": "搜索文件、文件夹…",
+  "engines": {
+    "mytools": ">=0.2.0 <0.3.0"
+  }
 }
